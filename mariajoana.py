@@ -1,3 +1,4 @@
+from os import PRIO_PROCESS
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium import webdriver
 import pandas as pd
@@ -35,7 +36,7 @@ def scraping_single_indicators(tick, driver):
     return result
 
 def clean_indicators_tables(tables):
-    indicators = pd.DataFrame()
+    indicators = {}
     for df in tables[:-1]: #para cada item na tabela
         x = 0 #variaveis para consultar blocaos de colunas
         y = 2
@@ -45,18 +46,30 @@ def clean_indicators_tables(tables):
                 df1 = data_frame.iloc[x:y].reset_index(drop = True) #busca par de linhas (título e valores)
                 df1.columns = df1.iloc[0] 
                 df1 = df1.iloc[1]
-                indicators.append(df1) #jogando para uma lista essa tabeça
+                print(df1, indicators)
+                indicators.update(df1.to_dict()) #jogando para uma lista essa tabela
             else:
                 df1 = data_frame.iloc[x:].reset_index(drop = True)
                 df1.columns = df1.iloc[0]
                 df1 = df1.iloc[1]
-                indicators.append(df1)
+                indicators.update(df1.to_dict())
                 break
             x += 2
             y += 2
     print(indicators)
+    indicators = pd.DataFrame(indicators)
     indicators.to_csv('indicadores.csv', index=False, sep='|')
 
+
+
     #to-do: conectar tudo
-    - vou ter um método controlador: precisa abrri um driver, passar pro outro lado
-    - o scraping_single_indicators (passar como parametro o driver também)
+    # - vou ter um método controlador: precisa abrir um driver, passar pro outro lado
+    # - o scraping_single_indicators vai retornar uma lista de tables
+
+def controller(tick):
+    driver = load_webdriver()
+
+    result = scraping_single_indicators(tick, driver)
+    clean_indicators_tables(result)
+
+controller('AZUL4')
