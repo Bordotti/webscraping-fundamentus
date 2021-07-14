@@ -1,6 +1,6 @@
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver import Chrome #,ChromeOptions
-from pandas import DataFrame, read_html 
+from selenium.webdriver import Chrome, ChromeOptions
+from pandas import read_html 
 from datetime import datetime
 import psycopg2
 
@@ -57,28 +57,22 @@ de_para_colunas = {
         'Dív. Bruta' : 'div_bruta',
         'Dív. Líquida' : 'div_liquida',
         'Patrim. Líq' : 'patrim_liq',
+        'Lucro Líquido': 'lucro_liquido',
+        'Receita Líquida': 'receita_liquida',
+        'EBIT': 'ebit'
         }
 
 def load_webdriver():
-
-    driver = Chrome(ChromeDriverManager().install())
+    options = ChromeOptions()
+    # prefs = {"download.default_directory": download_path} # Pasta padrão para download
+    #options.add_argument("--disable-gpu") # desabilita uso de gpu
+    options.add_argument("--headless") # sem abrir parte gráfica do navegador
+    options.add_argument("--disable-logging") # desabilita os logs do selenium
+    options.add_argument("--log-level=3") # aumenta o nível de log para Critico
+    options.add_argument("--output=/dev/null") # pasta temporária sem limite
+    # options.add_experimental_option("prefs", prefs)
+    driver = Chrome(ChromeDriverManager().install(), options=options)
     return driver
-
-    # def open_browser(self, download_path):
-    #         try:
-    #             print(' - Abrindo Navegador')
-    #             options = webdriver.ChromeOptions()
-    #             prefs = {"download.default_directory": download_path}
-    #             options.add_argument("--disable-gpu")
-    #             options.add_argument("--headless")
-    #             options.add_argument("--disable-logging")
-    #             options.add_argument("--log-level=3")
-    #             options.add_argument("--output=/dev/null")
-    #             options.add_experimental_option("prefs", prefs)
-    #             driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
-    #             return Response(code=0, data=driver)
-    #         except Exception as e:
-    #             return Response(code=1, message=f'open_browser Error: {e}, lineno: {sys.exc_info()[2].tb_lineno}')
 
 
 def scraping_single_indicators(tick, driver):
@@ -95,7 +89,7 @@ def scraping_single_indicators(tick, driver):
 
 def clean_indicators_tables(tables):
     indicators = {}
-    for num_tabela, df in enumerate(tables[:-1]): #para cada item na tabela
+    for num_tabela, df in enumerate(tables): #para cada item na tabela
         df = df[0]
         x = 0 #variaveis para consultar blocaos de colunas
         y = 2
@@ -105,19 +99,28 @@ def clean_indicators_tables(tables):
         df = df.replace(de_para_colunas)
         if num_tabela == 0:
             data_frame = df.T #puxa 1o elemento da lista df, todas linhas, - a 1a e faz transpose da tabela
-        else:
+        elif num_tabela < len(tables)-1:
             data_frame = df.iloc[1:].T #puxa 1o elemento da lista df, todas linhas, - a 1a e faz transpose da tabela
+        else:
+            data_frame = df.iloc[2:].T
         while True:
             if data_frame.shape[0]-1 >= y: #se y é menor que a quantidade de linhas, tá no fim da tabela?
                 df1 = data_frame.iloc[x:y].reset_index(drop = True) #busca par de linhas (título e valores)
-                df1.columns = df1.iloc[0]
+                if num_tabela == len(tables)-1:
+                    df1.columns = [col+'_ult_12_mes' for col in df1.iloc[0]]
+                else:
+                    df1.columns = df1.iloc[0]
                 df1 = df1.iloc[1]
                 indicators.update(df1.to_dict()) #jogando para uma lista essa tabela
             else:
                 df1 = data_frame.iloc[x:].reset_index(drop = True)
-                df1.columns = df1.iloc[0]
+                if num_tabela == len(tables)-1:
+                    df1.columns = [col+'_ult_3_mes' for col in df1.iloc[0]]
+                else:
+                    df1.columns = df1.iloc[0]
                 df1 = df1.iloc[1]
                 indicators.update(df1.to_dict())
+                #print(indicators)
                 break
             x += 2
             y += 2
@@ -141,31 +144,29 @@ def clean_indicators_tables(tables):
 
 def controller(tickers):
     driver = load_webdriver()
-    #all_indicators = DataFrame()
     tables_list = []
     
     for tick in tickers:
-        tables = scraping_single_indicators(tick, driver)
-        tables_list.append(tables)
+        print(' - Consultando:', tick)
+        tables_list.append(scraping_single_indicators(tick, driver))
 
     driver.close()
 
+    all_indicators = []
+    print(' - Tratando tabelas')
     for tables in tables_list:
-        result = clean_indicators_tables(tables)
-        #all_indicators = all_indicators.append(result)
-    
-    return result
+        all_indicators.append(clean_indicators_tables(tables)) # ta pegando só o ultimo - TO FIX
+       
+    return all_indicators
 
 
 def convert_values(value:str):
     # not working - TO FIX
     try:
         if '%' in value:
-            return float(value.strip('%').replace(',','.')) / 100
-        elif '.'  in value or ',' in value: # elif any([True if x in value else False for x in ['.', ',']])  
-            x = float(value.replace(',', "").replace('.', ",")) # 2,999,999.00
-            print(x)
-            return x
+            return round(float(value.strip('%').replace(',','.')) / 100, 4)
+        elif value.isnumeric():
+            return float(value)
         else:
             return value
     except Exception as e:
@@ -174,33 +175,39 @@ def convert_values(value:str):
 
 
 def query_editor(indicators):
-    columns = ''
-    values = ''
-    for key, value in indicators.items():
-        value = convert_values(str(value))
-        columns += f'"{key}",'
-        values += f"'{value}'," 
-    columns = columns.rstrip(',')
-    values = values.rstrip(',')
-
-    query = f'INSERT INTO public.indicators_raw ({columns}) VALUES ({values})'
-    print(query)
-    db_controller(query)
+    queries_list = []
+    for tick in indicators:
+        columns = ''
+        values = ''
+        for key, value in tick.items():
+            value = convert_values(str(value))
+            columns += f'"{key}",'
+            values += f"'{value}',"
+        columns = columns.rstrip(',')
+        values = values.rstrip(',')
 
 
-def db_controller(query):
-    con = psycopg2.connect(database="DB", user=db_user, password=db_pwd, host="127.0.0.1", port="5432")
+        queries_list.append(f'INSERT INTO public.indicators_raw ({columns}) VALUES ({values})')
+        
+    db_controller(queries_list)
+
+
+def db_controller(queries_list:list):
+    db_user = 'myuser'
+    db_pwd = 'root'
+    con = psycopg2.connect(database="personal", user=db_user, password=db_pwd, host="127.0.0.1", port="5432")
     cur = con.cursor()
     try:
-        cur.execute(query)
+        for query in queries_list:
+            cur.execute(query)
         con.commit()
     except Exception as e:
-        print(e)
+        print(e, query)
         con.rollback()
     con.close()
 
 
-tickers = ['AZUL4']#, 'ITSA4', 'RNEW4', 'TRPL4', 'TRPL3', 'WEGE3', 'VVAR3']
+tickers = ['AZUL4', 'ITSA4', 'RNEW4', 'TRPL4', 'TRPL3', 'WEGE3', 'VVAR3']
 
 
 t0 = now()
