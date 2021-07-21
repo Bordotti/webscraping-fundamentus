@@ -2,8 +2,9 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver import Chrome, ChromeOptions
 from pandas import read_html 
 from datetime import datetime
+from threading import Thread
+from numpy import array_split
 import psycopg2
-
 
 now = datetime.now
 de_para_colunas = {
@@ -171,11 +172,11 @@ def controller(tickers):
     print(' - Tratando tabelas')
     for tables in tables_list:
         all_indicators.append(clean_indicators_tables(tables)) # ta pegando só o ultimo - TO FIX
+    
+    query_editor(all_indicators)
 
-    return all_indicators
 
-
-def sector_controller():
+def ticker_controller():
     driver = load_webdriver()
     table = scraping_single_tickers(driver)
     driver.close()
@@ -230,15 +231,21 @@ def db_controller(queries_list:list):
     con.close()
 
 
-tickers = sector_controller()
+def thread_controller(tickers):
+    threads = []
+    tickers_list = array_split(tickers, 10)
+    
+    for tk_list in tickers_list:
+        t = Thread(target=controller, args=[tk_list], daemon=True)
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
 
 
 t0 = now()
 
-indicators = controller(tickers)
+thread_controller(ticker_controller()) #chama método (ticker_controller) e retorna uma lista de tickers que é passada como parâmetro do thread_controller
+
 print(f'Tempo de execução 1: {now()-t0}')
-
-query_editor(indicators)
-
-print(f'Tempo de execução 2: {now()-t0}')
-
