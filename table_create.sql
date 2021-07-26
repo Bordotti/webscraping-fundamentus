@@ -1,6 +1,6 @@
 -- Table: public.indicators_raw
 
--- DROP TABLE public.indicators_raw;
+DROP TABLE public.indicators_raw;
 
 CREATE TABLE public.indicators_raw
 (
@@ -25,6 +25,8 @@ CREATE TABLE public.indicators_raw
     "var_2018%" double precision,
     "var_2017%" double precision,
     "var_2016%" double precision,
+	"var_2015%" double precision,
+    "var_2014%" double precision,
     p_l double precision,
     p_vp double precision,
     p_ebit double precision,
@@ -59,7 +61,13 @@ CREATE TABLE public.indicators_raw
     ebit_ult_12_mes double precision,
     ebit_ult_3_mes double precision,
     lucro_liquido_ult_12_mes double precision,
-    lucro_liquido_ult_3_mes double precision
+    lucro_liquido_ult_3_mes double precision,
+	carteira_de_credito double precision,
+    depositos double precision,
+	resultado_intermed_financ_ult_12_mes double precision,
+	resultado_intermed_financ_ult_3_mes double precision,
+	receita_servicos_ult_12_mes double precision,
+	receita_servicos_ult_3_mes double precision
 )
 
 TABLESPACE pg_default;
@@ -67,6 +75,6 @@ TABLESPACE pg_default;
 ALTER TABLE public.indicators_raw
     OWNER to postgres;
 
-GRANT DELETE, SELECT, TRUNCATE, UPDATE, INSERT ON TABLE public.indicators_raw TO myuser;
+GRANT INSERT, SELECT, UPDATE, DELETE, TRUNCATE ON TABLE public.indicators_raw TO myuser;
 
 GRANT ALL ON TABLE public.indicators_raw TO postgres;
