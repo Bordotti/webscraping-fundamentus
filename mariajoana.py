@@ -5,8 +5,10 @@ from datetime import datetime
 from threading import Thread
 from numpy import array_split
 import psycopg2
+
 from tqdm import tqdm
 from retry import retry
+
 
 now = datetime.now
 de_para_colunas = {
@@ -83,6 +85,7 @@ def load_webdriver():
     driver = Chrome(ChromeDriverManager().install(), options=options)
     return driver
 
+
 @retry(tries=100)
 def scraping_single_indicators(tick, driver):
     url = f'http://fundamentus.com.br/detalhes.php?papel={tick}'
@@ -94,6 +97,7 @@ def scraping_single_indicators(tick, driver):
         result[index] = df #trocando elemento por um dataframe na lista result
 
     return result
+
 
 @retry(tries=100)
 def scraping_single_tickers(driver):
@@ -113,6 +117,7 @@ def clean_tickers_tables(tables):
 
 def clean_indicators_tables(tables):
     indicators = {}
+
     try:
         for num_tabela, df in enumerate(tables): #para cada item na tabela
             df = df[0]
@@ -179,7 +184,6 @@ def clean_indicators_tables(tables):
         print(indicators)
         return {}
 
-
     #to-do: conectar tudo
     # - vou ter um método controlador: precisa abrir um driver, passar pro outro lado
     # - o scraping_single_indicators vai retornar uma lista de tables
@@ -209,6 +213,7 @@ def controller(tickers):
 
 def ticker_controller():
     driver = load_webdriver()
+
     table = scraping_single_tickers(driver)
     driver.close()
 
@@ -220,6 +225,7 @@ def convert_values(value:str):
     try:
         if '%' in value:
             return round(float(value.strip('%').replace('.','').replace(',','.')) / 100, 4)
+
         elif value.isnumeric():
             return float(value)
         else:
@@ -264,7 +270,9 @@ def db_controller(queries_list:list):
 
 def thread_controller(tickers):
     threads = []
-    tickers_list = array_split(tickers, 6)
+
+    tickers_list = array_split(tickers, 10)
+
     
     for tk_list in tickers_list:
         t = Thread(target=controller, args=[tk_list], daemon=True)
